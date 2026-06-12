@@ -26,8 +26,7 @@ class TicketSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         guild = bot.get_guild(GUILD_ID)
-        # prevent duplicate tickets
-        for ch in guild.channels:
+        for ch in guild.text_channels:
             if ch.name == f"ticket-{interaction.user.name.lower()}":
                 return await interaction.response.send_message("You already have an open ticket!", ephemeral=True)
 
@@ -35,11 +34,11 @@ class TicketSelect(discord.ui.Select):
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
             guild.get_role(STAFF): discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
         }
 
         channel = await guild.create_text_channel(
-            f"ticket-{interaction.user.name}",
+            name=f"ticket-{interaction.user.name}",
             category=guild.get_channel(CATEGORY),
             overwrites=overwrites
         )
@@ -50,15 +49,18 @@ class TicketSelect(discord.ui.Select):
         if self.values[0] == "User Reports":
             embed.add_field(name="Please provide", value="• Username\n• User ID\n• Reason\n• Screenshots/Proof", inline=False)
 
-        view = CloseView()
-        await channel.send(f"<@&{STAFF}>", embed=embed, view=view)
+        await channel.send(f"<@&{STAFF}>", embed=embed, view=CloseView())
         await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
 
 class TicketView(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None); self.add_item(TicketSelect())
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketSelect())
 
 class CloseView(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None)
+    def __init__(self):
+        super().__init__(timeout=None)
+
     @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.red, emoji="🔒")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
         log = bot.get_guild(GUILD_ID).get_channel(LOG)
@@ -71,9 +73,9 @@ async def on_ready():
     print("Windowra Ticket Bot online")
 
 @tree.command(name="panel", description="Post ticket panel", guild=discord.Object(id=GUILD_ID))
-async def panel(i: discord.Interaction):
+async def panel(interaction: discord.Interaction):
     embed = discord.Embed(title="Windowra Support", description="Select a reason below to open a ticket", color=0x5865F2)
-    await i.channel.send(embed=embed, view=TicketView())
-    await i.response.send_message("Panel posted", ephemeral=True)
+    await interaction.channel.send(embed=embed, view=TicketView())
+    await interaction.response.send_message("Panel posted", ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
