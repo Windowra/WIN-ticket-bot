@@ -78,8 +78,20 @@ async def on_ready():
 
 @tree.command(name="panel", description="Post ticket panel", guild=discord.Object(id=GUILD_ID))
 async def panel(interaction: discord.Interaction):
-    embed = discord.Embed(title="Windowra Support", description="Select a reason below to open a ticket", color=0x5865F2)
+    embed = discord.Embed(
+        title="🎮 Windowra Support Center",
+        description="**Need help?** We've got you.\n\n"
+                    "> 🎮 **General Support** — Questions, help, info\n"
+                    "> 🐛 **Bug Report** — Found a glitch? Tell us\n"
+                    "> 🚨 **User Reports** — Report rule breakers\n"
+                    "> 💼 **Staff Application** — Join the team\n\n"
+                    "*Select an option below to open a private ticket*",
+        color=0x2b2d31 # dark sleek color
+    )
+    embed.set_thumbnail(url="https://i.imgur.com/6X4QX5n.png") # you can replace with your logo
+    embed.set_footer(text="Windowra • Fast response times", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+
     await interaction.channel.send(embed=embed, view=TicketView())
-    await interaction.response.send_message("Panel posted", ephemeral=True)
+    await interaction.response.send_message("✅ Premium panel posted", ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
