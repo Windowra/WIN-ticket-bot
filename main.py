@@ -69,8 +69,12 @@ class CloseView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    await tree.sync(guild=discord.Object(id=GUILD_ID))
-    print("Windowra Ticket Bot online")
+    try:
+        await tree.sync(guild=discord.Object(id=GUILD_ID))
+        print("Windowra Ticket Bot online - commands synced")
+    except Exception as e:
+        print(f"Sync failed (bot will still work): {e}")
+        print("Windowra Ticket Bot online")
 
 @tree.command(name="panel", description="Post ticket panel", guild=discord.Object(id=GUILD_ID))
 async def panel(interaction: discord.Interaction):
