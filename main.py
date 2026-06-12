@@ -55,6 +55,32 @@ class TicketSelect(discord.ui.Select):
         super().__init__(placeholder="Choose a reason...", options=options, custom_id="ticket_select")
 
     async def callback(self, interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True) # stop double-clicks
+
+    guild = interaction.guild
+    # Check if user already has a ticket
+    for channel in guild.text_channels:
+        if channel.name == f"ticket-{interaction.user.name.lower()}" or (channel.topic and str(interaction.user.id) in channel.topic):
+            return await interaction.followup.send(f"You already have a ticket: {channel.mention}", ephemeral=True)
+
+    category = guild.get_channel(CATEGORY_ID)
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        guild.get_role(STAFF_ROLE_ID): discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+    channel = await guild.create_text_channel(
+        f"ticket-{interaction.user.name}",
+        category=category,
+        overwrites=overwrites,
+        topic=f"User ID: {interaction.user.id}" # store ID to prevent dupes
+    )
+
+    embed = discord.Embed(title=f"{self.values[0]} Ticket", description=f"Hey {interaction.user.mention}, staff will help you shortly.", color=0x5865F2)
+    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+    embed.set_thumbnail(url=WINDOWRA_LOGO)
+    await channel.send(content=f"<@&{STAFF_ROLE_ID}>", embed=embed, view=CloseView())
+    await interaction.followup.send(f"✅ {channel.mention}", ephemeral=True)
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         staff_role = guild.get_role(STAFF_ROLE_ID)
