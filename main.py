@@ -2,70 +2,87 @@ import discord
 from discord import app_commands
 import os
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID"))
+STAFF_ROLE_ID = int(os.getenv("STAFF_ROLE_ID"))
+CATEGORY_ID = int(os.getenv("CATEGORY_ID"))
+LOG_ID = int(os.getenv("LOG_ID"))
+
+# Replace this with your Windowra logo URL after you upload it to imgur/discord
+WINDOWRA_LOGO = "https://i.imgur.com/6X4QX5n.png" # placeholder for now
+
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True
-
 bot = discord.Client(intents=intents)
 tree = app_commands.CommandTree(bot)
-
-GUILD_ID = int(os.getenv("GUILD_ID"))
-CATEGORY = int(os.getenv("TICKET_CATEGORY_ID"))
-STAFF = int(os.getenv("STAFF_ROLE_ID"))
-LOG = int(os.getenv("TICKET_LOG_ID"))
-
-class TicketSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="General Support", emoji="🎮", description="Get help with the server"),
-            discord.SelectOption(label="Bug Report", emoji="🐛", description="Report a bug or glitch"),
-            discord.SelectOption(label="User Reports", emoji="🚨", description="Report a rule-breaking user"),
-            discord.SelectOption(label="Staff Application", emoji="💼", description="Apply for staff")
-        ]
-        super().__init__(placeholder="Choose a ticket type...", options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        guild = bot.get_guild(GUILD_ID)
-        for ch in guild.text_channels:
-            if ch.name == f"ticket-{interaction.user.name.lower()}":
-                return await interaction.response.send_message("You already have an open ticket!", ephemeral=True)
-
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-            guild.get_role(STAFF): discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
-        }
-
-        channel = await guild.create_text_channel(
-            name=f"ticket-{interaction.user.name}",
-            category=guild.get_channel(CATEGORY),
-            overwrites=overwrites
-        )
-
-        embed = discord.Embed(title=f"{self.values[0]} Ticket", color=0x2b2d31)
-        embed.description = f"Hello {interaction.user.mention}, staff will be with you shortly."
-
-        if self.values[0] == "User Reports":
-            embed.add_field(name="Please provide", value="• Username\n• User ID\n• Reason\n• Screenshots/Proof", inline=False)
-
-        await channel.send(f"<@&{STAFF}>", embed=embed, view=CloseView())
-        await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
-
-class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketSelect())
 
 class CloseView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.red, emoji="🔒")
+    @discord.ui.button(label="🔒 Close Ticket", style=discord.ButtonStyle.red, custom_id="close_ticket")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log = bot.get_guild(GUILD_ID).get_channel(LOG)
-        await log.send(f"Ticket {interaction.channel.name} closed by {interaction.user}")
+        # Create transcript
+        messages = [msg async for msg in interaction.channel.history(limit=200, oldest_first=True)]
+        transcript = f"Transcript for {interaction.channel.name}\n\n"
+        for m in messages:
+            transcript += f"[{m.created_at.strftime('%H:%M')}] {m.author}: {m.content}\n"
+
+        # Send to logs
+        log_channel = interaction.guild.get_channel(LOG_ID)
+        if log_channel:
+            embed = discord.Embed(title="Ticket Closed", description=f"**{interaction.channel.name}** closed by {interaction.user.mention}", color=0xff0000)
+            embed.set_thumbnail(url=WINDOWRA_LOGO)
+            await log_channel.send(embed=embed, file=discord.File(fp=discord.utils._BytesI(transcript.encode()), filename=f"{interaction.channel.name}.txt"))
+
+        await interaction.response.send_message("Closing in 3 seconds...")
+        await discord.utils.sleep_until(discord.utils.utcnow() + discord.utils.timedelta(seconds=3))
         await interaction.channel.delete()
+
+    @discord.ui.button(label="📢 Claim", style=discord.ButtonStyle.green, custom_id="claim_ticket")
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if STAFF_ROLE_ID not in [r.id for r in interaction.user.roles]:
+            return await interaction.response.send_message("Staff only", ephemeral=True)
+        await interaction.channel.set_permissions(interaction.user, send_messages=True, read_messages=True)
+        embed = discord.Embed(description=f"✅ Ticket claimed by {interaction.user.mention}", color=0x00ff00)
+        await interaction.response.send_message(embed=embed)
+
+class TicketSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="General Support", description="Questions & help", emoji="🎮", value="General Support"),
+            discord.SelectOption(label="Bug Report", description="Report a bug", emoji="🐛", value="Bug Report"),
+            discord.SelectOption(label="User Reports", description="Report a player", emoji="🚨", value="User Reports"),
+            discord.SelectOption(label="Staff Application", description="Apply for staff", emoji="💼", value="Staff Application"),
+        ]
+        super().__init__(placeholder="Select a reason...", options=options, custom_id="ticket_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        category = guild.get_channel(CATEGORY_ID)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            guild.get_role(STAFF_ROLE_ID): discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        }
+        channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", category=category, overwrites=overwrites)
+
+        embed = discord.Embed(
+            title=f"{self.values[0]} Ticket",
+            description=f"Hey {interaction.user.mention}, welcome to Windowra Support!\n\n**Please describe your issue below and staff will assist you shortly.**",
+            color=0x5865F2
+        )
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        embed.set_thumbnail(url=WINDOWRA_LOGO)
+        embed.set_footer(text="Windowra • Premium Support")
+
+        await channel.send(content=f"<@&{STAFF_ROLE_ID}> {interaction.user.mention}", embed=embed, view=CloseView())
+        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
+
+class TicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketSelect())
 
 @bot.event
 async def on_ready():
@@ -73,25 +90,25 @@ async def on_ready():
         await tree.sync(guild=discord.Object(id=GUILD_ID))
         print("Windowra Ticket Bot online - commands synced")
     except Exception as e:
-        print(f"Sync failed (bot will still work): {e}")
+        print(f"Sync failed: {e}")
         print("Windowra Ticket Bot online")
 
 @tree.command(name="panel", description="Post ticket panel", guild=discord.Object(id=GUILD_ID))
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎮 Windowra Support Center",
-        description="**Need help?** We've got you.\n\n"
-                    "> 🎮 **General Support** — Questions, help, info\n"
-                    "> 🐛 **Bug Report** — Found a glitch? Tell us\n"
-                    "> 🚨 **User Reports** — Report rule breakers\n"
-                    "> 💼 **Staff Application** — Join the team\n\n"
-                    "*Select an option below to open a private ticket*",
-        color=0x2b2d31 # dark sleek color
+        description="**Need help?** Select an option below to open a private ticket.\n\n"
+                    "> 🎮 **General Support** — Questions & help\n"
+                    "> 🐛 **Bug Report** — Found a glitch?\n"
+                    "> 🚨 **User Reports** — Report players\n"
+                    "> 💼 **Staff Application** — Join the team",
+        color=0x2b2d31
     )
-    embed.set_thumbnail(url="https://i.imgur.com/6X4QX5n.png") # you can replace with your logo
-    embed.set_footer(text="Windowra • Fast response times", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+    embed.set_thumbnail(url=WINDOWRA_LOGO)
+    embed.set_image(url="https://i.imgur.com/7bYgKxZ.png") # banner line
+    embed.set_footer(text="Windowra • Fast response • 24/7", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
 
     await interaction.channel.send(embed=embed, view=TicketView())
     await interaction.response.send_message("✅ Premium panel posted", ephemeral=True)
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+bot.run(TOKEN)
