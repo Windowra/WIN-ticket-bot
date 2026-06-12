@@ -57,11 +57,24 @@ class TicketSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
+        staff_role = guild.get_role(STAFF_ROLE_ID)
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.get_role(STAFF_ROLE_ID): discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            staff_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True) # <-- GIVE BOT PERMS
         }
+
+        channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", category=category, overwrites=overwrites)
+
+        embed = discord.Embed(title=f"{self.values[0]} Ticket", description=f"Hey {interaction.user.mention}, staff will help you shortly.", color=0x5865F2)
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        embed.set_thumbnail(url=WINDOWRA_LOGO)
+
+        # Don't ping with <@&> — just mention in embed to avoid 403
+        await channel.send(content=f"{staff_role.mention} {interaction.user.mention}", embed=embed, view=CloseView(), allowed_mentions=discord.AllowedMentions(roles=True, users=True))
+        await interaction.response.send_message(f"✅ {channel.mention}", ephemeral=True)
         channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", category=category, overwrites=overwrites)
         embed = discord.Embed(title=f"{self.values[0]} Ticket", description=f"Hey {interaction.user.mention}, staff will help you shortly.", color=0x5865F2)
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
