@@ -9,7 +9,7 @@ STAFF_ROLE_ID = int(os.getenv("STAFF_ROLE_ID", "0"))
 CATEGORY_ID = int(os.getenv("CATEGORY_ID", "0"))
 LOG_ID = int(os.getenv("LOG_ID", "0"))
 
-WINDOWRA_LOGO = "https://i.imgur.com/6X4QX5n.png"
+WINDOWRA_LOGO = "https://media.discordapp.net/attachments/1496766733057261588/1514867543045705889/ticket_icon_transparent.png?ex=6a2cedd7&is=6a2b9c57&hm=709a6e5ca97fe1aa80f5879a59c77bfa933c58304549a2473bf18ef40ea4fc03&=&format=webp&quality=lossless&width=768&height=768"
 
 intents = discord.Intents.default()
 intents.message_content = True
